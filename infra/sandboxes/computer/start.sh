@@ -11,6 +11,7 @@ cd "$AGENT_HOME"
 
 if [[ -n "${RAKAZO_COMPUTER_CONTROL_TOKEN:-}" ]]; then
   /usr/local/bin/rakazo-computer-control >/tmp/rakazo/control.log 2>&1 &
+  /usr/local/bin/rakazo-computer-exec >/tmp/rakazo/exec.log 2>&1 &
 fi
 
 rm -f /tmp/.X1-lock /tmp/.X11-unix/X1

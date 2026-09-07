@@ -10,6 +10,7 @@ RUN pnpm exec vitest run packages/adapters/src/pi-astra.test.ts packages/adapter
 RUN node --test infra/railway/start-backend.test.mjs
 RUN node --test infra/railway/computer-gateway.test.mjs
 RUN pnpm exec vitest run apps/web/src/screen-proxy.test.ts apps/api/src/screen-proxy.test.ts
+RUN pnpm exec vitest run infra/sandboxes/supervisor/src/http-exec.test.ts
 RUN RAKAZO_ALLOW_DEV_SECRETS=1 pnpm --filter @rakazo/web build
 RUN install -d -m 750 -o node -g node /data /app/apps/web/node_modules/.vite-temp
 ARG GIT_SHA

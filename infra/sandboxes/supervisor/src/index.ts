@@ -43,6 +43,7 @@ import {
   xdotoolCommand,
 } from "./computer-spec.js";
 import { assertComputerHomeWritable } from "./home-ownership.js";
+import { runHttpComputerCommand } from "./http-exec.js";
 import {
   assertRequestIdentity,
   attemptComputerControl,
@@ -820,6 +821,7 @@ async function ensureComputerImage() {
             "Dockerfile",
             "start.sh",
             "control.py",
+            "exec_server.py",
             "xcapture.c",
             "rakazo-browser",
             "rakazo-page-browser",
@@ -1222,6 +1224,12 @@ async function runContainerCommand(
   options: { workingDir?: string; env?: string[]; timeoutMs?: number; signal?: AbortSignal } = {},
 ): Promise<{ stdout: string; stderr: string; code: number }> {
   options.signal?.throwIfAborted();
+  if (process.env.SANDBOX_EXEC_TRANSPORT === "http") {
+    if (controlViaLoopback) throw new Error("HTTP commands require direct container networking");
+    const endpoint = computerControlEndpoint(await container.inspect());
+    if (!endpoint) throw new Error("Computer command endpoint unavailable");
+    return runHttpComputerCommand(endpoint, argv, options);
+  }
   const timeoutMs = options.timeoutMs;
   const completionMarker = timeoutMs
     ? `/tmp/rakazo-command-${randomUUID()}.completed-124`
@@ -1339,6 +1347,16 @@ async function writeContainerFile(
     "with open(target, 'wb') as f: f.write(sys.stdin.buffer.read())",
     `os.chmod(target, ${executable ? "0o700" : "0o600"})`,
   ].join("\n");
+  if (process.env.SANDBOX_EXEC_TRANSPORT === "http") {
+    const endpoint = computerControlEndpoint(await container.inspect());
+    if (!endpoint) throw new Error("Computer command endpoint unavailable");
+    const result = await runHttpComputerCommand(endpoint, ["python3", "-c", script, target], {
+      env: ["HOME=/home/rakazo"],
+      stdinBase64: content.toString("base64"),
+    });
+    if (result.code !== 0) throw new Error(result.stderr || "file write failed");
+    return;
+  }
   const exec = await container.exec({
     Cmd: ["python3", "-c", script, target],
     AttachStdin: true,

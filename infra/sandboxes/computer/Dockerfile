@@ -48,6 +48,7 @@ WORKDIR /home/rakazo
 # otherwise leave these files unreadable to USER 1000 at runtime.
 COPY --chmod=755 start.sh /usr/local/bin/rakazo-computer
 COPY --chmod=755 control.py /usr/local/bin/rakazo-computer-control
+COPY --chmod=755 exec_server.py /usr/local/bin/rakazo-computer-exec
 COPY --from=capture-builder /build/librakazo-xcapture.so /usr/local/lib/librakazo-xcapture.so
 COPY --chmod=755 rakazo-browser /usr/local/bin/rakazo-browser
 COPY --chmod=755 rakazo-page-browser /usr/local/bin/rakazo-page-browser

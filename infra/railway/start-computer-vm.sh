@@ -20,9 +20,11 @@ if ! docker container inspect grokbot-supervisor >/dev/null 2>&1; then
     --env-file "$ENV_FILE" -e HOSTNAME= -e DATA_DIR=/data \
     -e SUPERVISOR_HOST=127.0.0.1 -e SUPERVISOR_PORT=7091 \
     -e SANDBOX_SCREEN_NETWORK=published -e SANDBOX_SCREEN_HOST=127.0.0.1 \
+    -e SANDBOX_EXEC_TRANSPORT=http \
     -e RAKAZO_COMPUTER_IMAGE=grokbot/computer:local \
     -e RAKAZO_COMPUTER_MEMORY=2g -e RAKAZO_COMPUTER_CPUS=2 \
     -v /var/run/docker.sock:/var/run/docker.sock -v /data:/data \
+    -v "$ROOT_DIR/infra/sandboxes/supervisor/src:/app/infra/sandboxes/supervisor/src:ro" \
     "$APP_IMAGE" node --import tsx /app/infra/sandboxes/supervisor/src/index.ts
 else docker start grokbot-supervisor >/dev/null; fi
 if ! docker container inspect grokbot-computer-gateway >/dev/null 2>&1; then

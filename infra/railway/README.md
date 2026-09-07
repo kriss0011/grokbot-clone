@@ -98,6 +98,16 @@ under `/data/homes`. Only these homes are mounted into bot containers. The
 supervisor creates homes on the VM; API/worker files remain on their Railway
 volume and use the sandbox file adapter to access the remote computer.
 
+The startup script selects `SANDBOX_EXEC_TRANSPORT=http`. This opt-in transport
+runs commands through a token-protected listener on port 7071 inside each
+computer, because OCI `docker exec` did not enter the correct filesystem on the
+tested Cloud Agent VM. The listener runs as the container's unprivileged user,
+bounds command duration/output, and supports cancellation and binary stdin.
+It is reachable only from the VM and its computer's isolated network. The
+default Docker exec transport remains unchanged for normal Docker hosts.
+Deploy the matching computer image and supervisor source together when updating
+this transport; the startup script mounts this checkout's supervisor source.
+
 The gateway authenticates supervisor requests and translates desktop URLs into
 expiring, signed loopback-port capabilities. The web app seals remote desktop
 targets and restores VNC tokens server-side. Docker's socket, supervisor port,
