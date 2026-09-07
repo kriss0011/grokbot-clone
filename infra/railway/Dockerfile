@@ -4,7 +4,7 @@ FROM ghcr.io/elie222/rakazo/app@sha256:ff7d2486a812b16294429cebe79e3e049d4c4c648
 USER root
 WORKDIR /app
 COPY --chmod=755 . .
-RUN CI=true pnpm install --frozen-lockfile
+RUN CI=true pnpm install --frozen-lockfile --prod=false
 RUN pnpm --filter @rakazo/db generate
 RUN pnpm exec vitest run packages/adapters/src/pi-astra.test.ts packages/adapters/src/pi-models.test.ts packages/adapters/src/pi-runtime-models.test.ts packages/adapters/src/pi-credentials.test.ts packages/adapters/src/pi-oauth.test.ts packages/adapters/src/pi-runtime-transport.test.ts
 RUN node --test infra/railway/start-backend.test.mjs
