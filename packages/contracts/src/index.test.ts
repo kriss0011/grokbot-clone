@@ -332,3 +332,26 @@ describe("contracts", () => {
     ).toBe(false);
   });
 });
+
+describe("bot creation model selection", () => {
+  it("preserves an explicit model and rejects incomplete selections", () => {
+    expect(
+      CreateBotInput.parse({
+        name: "Researcher",
+        modelProvider: "openai-codex",
+        modelId: "gpt-6-astra",
+      }),
+    ).toMatchObject({ modelProvider: "openai-codex", modelId: "gpt-6-astra" });
+    for (const selection of [
+      { modelProvider: "openai" },
+      { modelId: "gpt-6-astra" },
+      { modelProvider: null },
+      { modelProvider: "openai", modelId: null },
+    ]) {
+      expect(CreateBotInput.safeParse({ name: "Researcher", ...selection }).success).toBe(false);
+    }
+    expect(
+      CreateBotInput.safeParse({ name: "Researcher", modelProvider: null, modelId: null }).success,
+    ).toBe(true);
+  });
+});

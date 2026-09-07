@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+import { captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
 
@@ -60,4 +60,26 @@ test("approval input resumes durable work", async ({ page }, testInfo) => {
   await expect(page.getByText("No longer active", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Send it" })).toHaveCount(0);
   await captureScreenshot(page, testInfo, "25-stopped-approval-prompt");
+});
+
+test("creating another bot waits for the owner's explicit approval", async ({ page }, testInfo) => {
+  await signup(page, `spawn-approval-${Date.now()}@rakazo.test`, "password12", "Bot Approval");
+  await completeOnboarding(page);
+  const before = await rpc<Array<{ id: string }>>(page, "bots/list", {});
+  const composer = page.getByPlaceholder(/Message/);
+  await composer.fill("create a bot named Researcher");
+  await composer.press("Enter");
+  const approval = page.getByRole("button", { name: "Create bot", exact: true });
+  await expect(approval).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Always allow this tool", exact: true }),
+  ).toHaveCount(0);
+  expect(await rpc(page, "bots/list", {})).toHaveLength(before.length);
+  await captureScreenshot(page, testInfo, "spawn-bot-explicit-approval");
+  await approval.click();
+  await expect
+    .poll(async () => (await rpc<Array<{ id: string }>>(page, "bots/list", {})).length)
+    .toBe(before.length + 1);
+  await page.reload();
+  expect(await rpc(page, "bots/list", {})).toHaveLength(before.length + 1);
 });

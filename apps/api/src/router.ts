@@ -434,6 +434,22 @@ export interface RouterDeps {
 export function createRouter(deps: RouterDeps) {
   const os = implement(appContract).$context<{ actor: Actor | null; signal?: AbortSignal }>();
   const repos = createRepos(deps.prisma);
+  async function validateBotModel(actor: Actor, provider?: string | null, modelId?: string | null) {
+    if (provider && modelId) {
+      const credential = await findModelCredential(deps.prisma, actor, provider);
+      if (!credential) {
+        throw new ORPCError("BAD_REQUEST", { message: "Connect that model provider first" });
+      }
+      const knownModels = [...listPiCatalog(), scriptedCatalogEntry];
+      const inCatalog = knownModels.some(
+        (item) => item.provider === provider && item.id === modelId,
+      );
+      if (!inCatalog && credential.defaultModel !== modelId) {
+        throw new ORPCError("BAD_REQUEST", { message: "Unknown model for that provider" });
+      }
+    }
+  }
+
   const mcpOAuth = deps.mcpOAuth ?? new McpOAuthBroker(deps.prisma, deps.secrets);
   const groupRepos = createGroupRepos(deps.prisma);
   const taughtSkills = createTaughtSkillsService({
@@ -742,9 +758,10 @@ export function createRouter(deps: RouterDeps) {
         if (!found) throw new IsolationError();
         return found;
       }),
-      create: authed.bots.create.handler(async ({ context, input }) =>
-        repos.createBot(context.actor, input),
-      ),
+      create: authed.bots.create.handler(async ({ context, input }) => {
+        await validateBotModel(context.actor, input.modelProvider, input.modelId);
+        return repos.createBot(context.actor, input);
+      }),
       duplicate: authed.bots.duplicate.handler(async ({ context, input }) => {
         const source = await repos.getBot(context.actor, input.botId);
         const duplicate = await repos.createBot(context.actor, {
@@ -797,23 +814,7 @@ export function createRouter(deps: RouterDeps) {
           });
           if (!section) throw new IsolationError();
         }
-        if (input.modelProvider && input.modelId) {
-          const credential = await findModelCredential(
-            deps.prisma,
-            context.actor,
-            input.modelProvider,
-          );
-          if (!credential) {
-            throw new ORPCError("BAD_REQUEST", { message: "Connect that model provider first" });
-          }
-          const knownModels = [...listPiCatalog(), scriptedCatalogEntry];
-          const inCatalog = knownModels.some(
-            (item) => item.provider === input.modelProvider && item.id === input.modelId,
-          );
-          if (!inCatalog && credential.defaultModel !== input.modelId) {
-            throw new ORPCError("BAD_REQUEST", { message: "Unknown model for that provider" });
-          }
-        }
+        await validateBotModel(context.actor, input.modelProvider, input.modelId);
         const thinkingLevel = input.thinkingLevel;
         if (input.thinkingLevel) {
           const provider =

@@ -632,3 +632,42 @@ describe("computer screen url", () => {
     expect(updateMany).not.toHaveBeenCalled();
   });
 });
+
+describe("new bot model validation", () => {
+  it.each([
+    { connected: false, modelId: "gpt-6-astra", message: "Connect that model provider first" },
+    { connected: true, modelId: "nonexistent-model", message: "Unknown model for that provider" },
+  ])(
+    "rejects invalid model selection before bot creation: $message",
+    async ({ connected, modelId, message }) => {
+      const create = vi.fn();
+      const prisma = {
+        spaceModelPreference: { findFirst: vi.fn().mockResolvedValue(null) },
+        userModelCredential: {
+          findFirst: vi
+            .fn()
+            .mockResolvedValue(connected ? { id: "credential-1", provider: "openai" } : null),
+        },
+        bot: { create },
+      } as unknown as PrismaClient;
+      const handler = new RPCHandler(createRouter({ prisma } as unknown as RouterDeps));
+      const actor: Actor = {
+        spaceId: "space-1",
+        userId: "user-1",
+        email: "user@rakazo.test",
+        isDeploymentOwner: false,
+      };
+      const { response } = await handler.handle(
+        new Request("http://127.0.0.1/rpc/bots/create", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ json: { name: "Researcher", modelProvider: "openai", modelId } }),
+        }),
+        { prefix: "/rpc", context: { actor } },
+      );
+      expect(response.status).toBe(400);
+      expect(await response.text()).toContain(message);
+      expect(create).not.toHaveBeenCalled();
+    },
+  );
+});

@@ -26,6 +26,8 @@ describe("toolRequiresApproval", () => {
     expect(toolRequiresApproval("cloud_agent_launch", false)).toBe(true);
     expect(toolRequiresApproval("create_space", false)).toBe(true);
     expect(toolRequiresExplicitApproval("create_space")).toBe(true);
+    expect(toolRequiresApproval("spawn_bot", false)).toBe(true);
+    expect(toolRequiresExplicitApproval("spawn_bot")).toBe(true);
     expect(toolRequiresExplicitApproval("archive_bot")).toBe(false);
   });
 
@@ -37,7 +39,6 @@ describe("toolRequiresApproval", () => {
       "write_file",
       "shell",
       "remember",
-      "spawn_bot",
       "run_subagent",
     ]) {
       expect(toolRequiresApproval(name, false)).toBe(false);

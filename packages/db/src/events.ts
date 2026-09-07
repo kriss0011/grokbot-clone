@@ -11,6 +11,7 @@ import {
   isSecretAskBlock,
   messagingChannelId,
   sanitizeJsonValue,
+  toolRequiresExplicitApproval,
 } from "@rakazo/core";
 import { getLogger } from "@rakazo/logging";
 import { cancelRunsInTransaction } from "./cancel-runs.js";
@@ -566,6 +567,9 @@ export async function answerRunInput(
         },
       });
       if (!approvalEffect) return null;
+      if (toolRequiresExplicitApproval(approvalEffect.kind)) {
+        if (run.userId !== input.answeredByUserId || input.answer === "always") return null;
+      }
       if (input.answer === "always") {
         if (run.userId !== input.answeredByUserId) return null;
         approvalUserId = input.answeredByUserId;

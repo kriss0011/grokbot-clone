@@ -71,3 +71,27 @@ describe("buildApprovalAskBlock", () => {
     expect(block.detail).toContain("stay separate from other spaces");
   });
 });
+
+it("requires a single explicit decision for the proposed bot", () => {
+  const block = buildApprovalAskBlock(
+    "spawn-1",
+    "spawn_bot",
+    {
+      name: "Researcher",
+      instructions: "Find sources",
+      prompt: "Research now",
+      computer_mode: "team",
+    },
+    [],
+  );
+  expect(block).toMatchObject({
+    text: "Create bot “Researcher”?",
+    actions: [
+      { id: "allow", label: "Create bot", outcome: "created" },
+      { id: "deny", label: "Cancel", outcome: "cancelled" },
+    ],
+  });
+  if (block.kind !== "ask") throw new Error("Expected ask");
+  expect(block.detail).toContain("instructions: Find sources");
+  expect(block.detail).toContain("prompt: Research now");
+});

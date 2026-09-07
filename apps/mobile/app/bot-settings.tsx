@@ -6,10 +6,12 @@ import {
   type ComputerMode,
   normalizeCreateBotProfile,
 } from "@rakazo/contracts";
+import { modelOptionKey, parseModelOptionKey } from "@rakazo/core";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { BotAvatar } from "../components/bot-avatar";
+import { BotModelPicker } from "../components/bot-model-picker";
 import { ComputerModePicker } from "../components/computer-mode-picker";
 import { type MobileBot, rpc } from "../lib/api";
 import { useI18n } from "../lib/i18n";
@@ -17,6 +19,8 @@ import { useMobileTokens } from "../lib/native";
 
 type BotSettingsRecord = MobileBot & {
   description?: string;
+  modelProvider?: string | null;
+  modelId?: string | null;
 };
 
 export default function BotSettingsScreen() {
@@ -30,6 +34,7 @@ export default function BotSettingsScreen() {
   const [description, setDescription] = useState("");
   const [color, setColor] = useState<string>(BOT_COLORS[0]);
   const [computerMode, setComputerMode] = useState<ComputerMode>("team");
+  const [modelKey, setModelKey] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -43,6 +48,11 @@ export default function BotSettingsScreen() {
         setDescription(next.description ?? "");
         setColor(next.color);
         setComputerMode(next.computerMode);
+        setModelKey(
+          next.modelProvider && next.modelId
+            ? modelOptionKey(next.modelProvider, next.modelId)
+            : "",
+        );
       })
       .catch((err) => setError(err instanceof Error ? err.message : t("Could not load bot")));
   }, [botId]);
@@ -60,6 +70,9 @@ export default function BotSettingsScreen() {
         description?: string;
         instructions?: string;
         color?: string;
+        modelProvider?: string | null;
+        modelId?: string | null;
+        thinkingLevel?: null;
       } = { botId };
       if (profile.name !== bot.name) input.name = profile.name;
       if (profile.title !== bot.title) input.title = profile.title;
@@ -67,6 +80,15 @@ export default function BotSettingsScreen() {
         input.description = profile.description;
         // Keep instructions in sync with description (same as web BotSettings).
         input.instructions = profile.instructions;
+      }
+      const selected = parseModelOptionKey(modelKey);
+      if (
+        (selected?.provider ?? null) !== (bot.modelProvider ?? null) ||
+        (selected?.modelId ?? null) !== (bot.modelId ?? null)
+      ) {
+        input.modelProvider = selected?.provider ?? null;
+        input.modelId = selected?.modelId ?? null;
+        input.thinkingLevel = null;
       }
       if (color !== bot.color) input.color = color;
       if (computerMode !== bot.computerMode) {
@@ -177,6 +199,7 @@ export default function BotSettingsScreen() {
             />
           ))}
         </ScrollView>
+        <BotModelPicker value={modelKey} onChange={setModelKey} />
         <ComputerModePicker value={computerMode} onChange={setComputerMode} />
         {error ? <Text style={{ color: tokens.destructive, marginTop: 16 }}>{error}</Text> : null}
         <Pressable

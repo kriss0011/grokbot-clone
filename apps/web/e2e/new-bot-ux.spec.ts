@@ -127,3 +127,61 @@ test("second bot from plus opens create form before persist", async ({ page }, t
   await expect(page.getByTestId("side-panel")).toHaveAttribute("data-panel", "closed");
   await captureScreenshot(page, testInfo, "second-bot-created");
 });
+
+test("selects a model when creating a bot and changes it in settings", async ({
+  page,
+}, testInfo) => {
+  await signup(page, `bot-model-${Date.now()}@rakazo.test`, "password12", "Bot Models");
+  await completeOnboarding(page);
+  // Fixture credentials are stored locally; no provider request is sent.
+  await rpc(page, "models/connect", {
+    provider: "openai",
+    apiKey: "fixture-openai-key",
+    modelId: "gpt-6-astra",
+    label: "OpenAI",
+  });
+  await openNewBot(page);
+  const form = page.getByTestId("create-bot-form");
+  const model = form.getByRole("combobox", { name: "Model", exact: true });
+  await expect(model).toContainText("GPT-6 Astra");
+  await model.selectOption("openai::gpt-6-astra");
+  await form.locator("label:has-text('Name') input").fill("Model Bot");
+  await captureScreenshot(page, testInfo, "create-bot-model");
+  const created = page.waitForResponse(
+    (response) => response.url().includes("/rpc/bots/create") && response.ok(),
+  );
+  await form.getByRole("button", { name: "Create", exact: true }).click();
+  const body = await (await created).json();
+  const botId = body.json.id;
+  expect(body.json).toMatchObject({ modelProvider: "openai", modelId: "gpt-6-astra" });
+  await page.getByPlaceholder("Message Model Bot").waitFor();
+  await page.locator("main").getByRole("button", { name: "Model Bot", exact: true }).click();
+  const settings = page.getByTestId("bot-settings");
+  const selection = settings.getByRole("combobox", { name: "Model", exact: true });
+  await expect(selection).toBeVisible();
+  await expect(selection).toHaveValue("openai::gpt-6-astra");
+  await selection.selectOption("openai::gpt-5.6-terra");
+  await captureScreenshot(page, testInfo, "edit-bot-model");
+  const saved = page.waitForResponse(
+    (response) => response.url().includes("/rpc/bots/update") && response.ok(),
+  );
+  await settings.getByRole("button", { name: "Save", exact: true }).click();
+  await saved;
+  expect(await rpc(page, "bots/get", { botId })).toMatchObject({
+    modelProvider: "openai",
+    modelId: "gpt-5.6-terra",
+  });
+  await page.reload();
+  await page.locator("main").getByRole("button", { name: "Model Bot", exact: true }).click();
+  await expect(selection).toHaveValue("openai::gpt-5.6-terra");
+  await selection.selectOption("");
+  const cleared = page.waitForResponse(
+    (response) => response.url().includes("/rpc/bots/update") && response.ok(),
+  );
+  await settings.getByRole("button", { name: "Save", exact: true }).click();
+  await cleared;
+  expect(await rpc(page, "bots/get", { botId })).toMatchObject({
+    modelProvider: null,
+    modelId: null,
+  });
+});

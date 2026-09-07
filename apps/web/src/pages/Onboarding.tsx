@@ -1,13 +1,16 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import {
+  type ModelCredential,
   OPENAI_COMPATIBLE_PROVIDER_ID,
   openAiCompatibleConnectReady,
   openAiCompatibleProbeSuccessMessage,
 } from "@rakazo/contracts";
 import {
+  connectedBotModelOptions,
   createModelProbe,
   featuredModelProviders,
   initialModelProbeState,
+  parseModelOptionKey,
   selectedProviderOutsideSearchResults,
 } from "@rakazo/core";
 import {
@@ -21,6 +24,7 @@ import {
 import { Check } from "lucide-react";
 import { useEffect, useId, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { BotModelSelect } from "../components/bot-model-select";
 import { localizedProviderHint } from "../lib/localized-provider-hint";
 import type { ModelCatalogEntry } from "../lib/model-auth";
 import { rpc } from "../lib/rpc";
@@ -43,6 +47,18 @@ export function OnboardingPage() {
     useState(initialModelProbeState);
   const [modelProbe] = useState(() => createModelProbe(setProbe));
   const resetOpenAiCompatibleProbe = modelProbe.reset;
+  const [botModelKey, setBotModelKey] = useState("");
+  const [botCredentials, setBotCredentials] = useState<ModelCredential[]>([]);
+  const [botDefaultModel, setBotDefaultModel] = useState<string>();
+  useEffect(() => {
+    if (step !== "bot") return;
+    void Promise.all([rpc.models.credentials(), rpc.me()])
+      .then(([credentials, me]) => {
+        setBotCredentials(credentials);
+        setBotDefaultModel(me.defaultModel ?? undefined);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : t`Could not load models`));
+  }, [step]);
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -215,6 +231,8 @@ export function OnboardingPage() {
         description,
         instructions: description,
         notifyOnFinish: true,
+        modelProvider: parseModelOptionKey(botModelKey)?.provider ?? null,
+        modelId: parseModelOptionKey(botModelKey)?.modelId ?? null,
       });
       // Onboarding continues conversationally in the thread: greeting first,
       // then the focus choice (immediate for the first bot).
@@ -609,6 +627,12 @@ export function OnboardingPage() {
               />
             </label>
             {error ? <p className="mt-3 text-sm text-destructive">{error}</p> : null}
+            <BotModelSelect
+              value={botModelKey}
+              onChange={setBotModelKey}
+              options={connectedBotModelOptions(botCredentials, catalog)}
+              defaultLabel={botDefaultModel}
+            />
             <Button className="mt-6" disabled={!name.trim()} onClick={() => void createBot()}>
               <Trans>Continue</Trans>
             </Button>

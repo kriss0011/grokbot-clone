@@ -4,8 +4,19 @@ import { approvalEffectKey } from "@rakazo/core/node/approval-effect-key";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { isApprovalPausedResult } from "./approval-effect.js";
 import { runAutoReviewJudge } from "./auto-review.js";
+import { spawnBot } from "./child-bots.js";
 import { createRunExecutor } from "./executor.js";
 import { catalogEntries, resolveCatalogCall } from "./lazy-tool-catalog.js";
+
+vi.mock("./child-bots.js", () => ({
+  spawnBot: vi.fn(async () => ({
+    ok: true,
+    botId: "child-1",
+    name: "Researcher",
+    threadId: "child-thread",
+  })),
+  archiveSpawnedBot: vi.fn(),
+}));
 
 vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./computer-lifecycle.js")>()),
@@ -141,7 +152,9 @@ function fixture({
   const execute = vi.fn(async function* (call: ConnectorCall) {
     yield { type: "result" as const, data: { item: call.args.id } };
   });
-  let calls = [{ args: { id: "item-1" }, executionId: "call-1" }];
+  let calls: Array<{ args: Record<string, unknown>; executionId: string }> = [
+    { args: { id: "item-1" }, executionId: "call-1" },
+  ];
   const runtimeRun = vi.fn(async function* (request: AgentRunRequest) {
     for (const call of calls) {
       const result = await request.executeTool!(
@@ -217,6 +230,55 @@ describe("connector read-only metadata and approval enforcement", () => {
       expect(runAutoReviewJudge).not.toHaveBeenCalled();
     },
   );
+
+  it.each(["user", "spawn", "routine", "webhook"])(
+    "requires explicit approval to spawn a bot on %s runs",
+    async (trigger) => {
+      vi.mocked(spawnBot).mockClear();
+      const f = fixture({
+        name: "spawn_bot",
+        trigger,
+        autoReview: true,
+        rules: [{ effect: "always_allow", matchKind: "tool", matchValue: "spawn_bot" }],
+      });
+      await f.run();
+      expect(f.pauseRunForInput).toHaveBeenCalledOnce();
+      expect(spawnBot).not.toHaveBeenCalled();
+      expect(runAutoReviewJudge).not.toHaveBeenCalled();
+      expect(f.effects[0]).toMatchObject({ kind: "spawn_bot", status: "intended" });
+      f.effects[0]!.status = "denied";
+      await f.run();
+      expect(spawnBot).not.toHaveBeenCalled();
+    },
+  );
+
+  it("creates only the approved bot once when a run resumes", async () => {
+    vi.mocked(spawnBot).mockClear();
+    const f = fixture({ name: "spawn_bot" });
+    f.setCalls([
+      { args: { name: "Researcher", instructions: "Find sources" }, executionId: "call-1" },
+    ]);
+    await f.run();
+    expect(spawnBot).not.toHaveBeenCalled();
+    f.effects[0]!.status = "approved";
+    f.setCalls([{ args: { name: "Unapproved name" }, executionId: "call-1" }]);
+    await f.run();
+    expect(spawnBot).toHaveBeenCalledOnce();
+    expect(spawnBot).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ name: "Researcher", instructions: "Find sources" }),
+    );
+    expect(f.effects[0]!.status).toBe("completed");
+    f.setCalls([
+      { args: { name: "Researcher", instructions: "Find sources" }, executionId: "call-1" },
+    ]);
+    await f.run();
+    expect(spawnBot).toHaveBeenCalledOnce();
+    f.setCalls([{ args: { name: "Second bot" }, executionId: "call-2" }]);
+    await f.run();
+    expect(spawnBot).toHaveBeenCalledOnce();
+    expect(f.effects[1]!.status).toBe("intended");
+  });
 
   describe.each([false, true])("catalog = %s", (catalog) => {
     it.each(["tool", "connector"] as const)(

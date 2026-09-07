@@ -2128,12 +2128,16 @@ export function ShellPage() {
     title: string;
     description: string;
     computerMode: ComputerMode;
+    modelProvider: string | null;
+    modelId: string | null;
   }) {
     const isFirstBot = botsRef.current.length === 0;
     const bot = await rpc.bots.create({
       ...normalizeCreateBotProfile(input),
       notifyOnFinish: true,
       computerMode: input.computerMode,
+      modelProvider: input.modelProvider,
+      modelId: input.modelId,
     });
     setBots((current) =>
       current.some((item) => item.id === bot.id) ? current : [bot, ...current],

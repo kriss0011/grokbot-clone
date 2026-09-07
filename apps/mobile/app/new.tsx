@@ -5,9 +5,11 @@ import {
   type ComputerMode,
   normalizeCreateBotProfile,
 } from "@rakazo/contracts";
+import { parseModelOptionKey } from "@rakazo/core";
 import { Stack, useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, ScrollView, Text, TextInput } from "react-native";
+import { BotModelPicker } from "../components/bot-model-picker";
 import { ComputerModePicker } from "../components/computer-mode-picker";
 import { type MobileBot, rpc } from "../lib/api";
 import { allowFocusPrompt, scheduleFocusPrompt } from "../lib/focus-prompt";
@@ -22,6 +24,7 @@ export default function NewBot() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [computerMode, setComputerMode] = useState<ComputerMode>("team");
+  const [modelKey, setModelKey] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -49,6 +52,8 @@ export default function NewBot() {
         ...normalizeCreateBotProfile({ name, title, description }),
         notifyOnFinish: true,
         computerMode,
+        modelProvider: parseModelOptionKey(modelKey)?.provider ?? null,
+        modelId: parseModelOptionKey(modelKey)?.modelId ?? null,
       });
       allowFocusPrompt(bot.id);
       router.replace({ pathname: "/thread", params: { botId: bot.id, name: bot.name } });
@@ -141,6 +146,7 @@ export default function NewBot() {
             textAlignVertical: "top",
           }}
         />
+        <BotModelPicker value={modelKey} onChange={setModelKey} />
         <ComputerModePicker value={computerMode} onChange={setComputerMode} />
         {error ? <Text style={{ color: tokens.destructive, marginTop: 16 }}>{error}</Text> : null}
         <Pressable

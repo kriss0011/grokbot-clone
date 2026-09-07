@@ -1,5 +1,5 @@
 import type { MessageBlock } from "@rakazo/contracts";
-import { redactSecrets } from "@rakazo/core";
+import { redactSecrets, toolRequiresExplicitApproval } from "@rakazo/core";
 
 const MAX_APPROVAL_SUMMARY_LENGTH = 500;
 const MAX_APPROVAL_DETAIL_LENGTH = 4_000;
@@ -19,28 +19,32 @@ export function buildApprovalAskBlock(
     approvalEffectId: effectId,
     text: truncate(
       redactSecrets(
-        toolName === "create_space" ? `${summary}?` : `Review before ${summary}`,
+        toolRequiresExplicitApproval(toolName) ? `${summary}?` : `Review before ${summary}`,
         secrets,
       ),
       MAX_APPROVAL_SUMMARY_LENGTH,
     ),
     detail: safeDetail ? truncate(safeDetail, MAX_APPROVAL_DETAIL_LENGTH) : undefined,
     status: "pending",
-    actions:
-      toolName === "create_space"
-        ? [
-            { id: "allow", label: "Create space", outcome: "created" },
-            { id: "deny", label: "Cancel", outcome: "cancelled" },
-          ]
-        : [
-            { id: "allow", label: "Allow once" },
-            { id: "always", label: "Always allow this tool" },
-            { id: "deny", label: "Deny" },
-          ],
+    actions: toolRequiresExplicitApproval(toolName)
+      ? [
+          {
+            id: "allow",
+            label: toolName === "spawn_bot" ? "Create bot" : "Create space",
+            outcome: "created",
+          },
+          { id: "deny", label: "Cancel", outcome: "cancelled" },
+        ]
+      : [
+          { id: "allow", label: "Allow once" },
+          { id: "always", label: "Always allow this tool" },
+          { id: "deny", label: "Deny" },
+        ],
   };
 }
 
 function describeApprovalAction(toolName: string, args: Record<string, unknown>): string {
+  if (toolName === "spawn_bot") return `Create bot “${String(args.name ?? "Untitled")}”`;
   if (toolName === "destination.write") {
     const collection = args.collection ? String(args.collection) : "records";
     const title = args.title ? ` "${String(args.title)}"` : "";
@@ -72,7 +76,11 @@ function formatApprovalDetail(
       "Bots, groups, chats, files, memory, and integrations in this space stay separate from other spaces.",
     );
   }
-  for (const key of ["collection", "title", "to", "subject", "amount", "body"]) {
+  const keys =
+    toolName === "spawn_bot"
+      ? ["title", "instructions", "prompt", "computer_mode"]
+      : ["collection", "title", "to", "subject", "amount", "body"];
+  for (const key of keys) {
     const value = args[key];
     if (value == null || value === "") continue;
     lines.push(`${key}: ${String(value)}`);
