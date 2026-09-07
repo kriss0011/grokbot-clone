@@ -75,11 +75,45 @@ log, API `/health`, public sign-in, and the model catalog. Connect ChatGPT throu
 Rakazo's **Models** UI using the user's own interactive sign-in. A healthy core
 deployment without a model connection cannot answer bot messages.
 
-This deployment intentionally uses `SANDBOX_PROVIDER=none`. Railway's normal
-service containers cannot run the privileged Docker supervisor used by the local
-Compose setup. Connect E2B, Daytona, Box (ascii.dev), or a separately hosted Docker
-supervisor before claiming browser/desktop computer support. No external provider
-credential is needed to deploy the core.
+`SANDBOX_PROVIDER=none` supports core setup only: sending a bot message still
+requires a computer. Railway's ordinary service containers cannot run this Docker
+supervisor. A dedicated Railway Cloud Agent VM can run it with Docker 29's native
+nftables firewall backend. Cloud Agent VMs are a beta product billed at VM rates;
+they must stay running for bot messages to work. Alternatively use E2B, Daytona,
+Box (ascii.dev), or another Docker host.
+
+## Dedicated computer VM
+
+Install Docker 29, its Buildx plugin, and this checkout on the dedicated VM.
+Build the desktop image with `docker build -t grokbot/computer:local
+infra/sandboxes/computer`. Create `/etc/grokbot-computer.env` with mode 600 and
+two values: an independent random `SANDBOX_SUPERVISOR_TOKEN` (at least 32 bytes)
+and `COMPUTER_PUBLIC_ORIGIN=https://<vm-public-domain>`. Never reuse account,
+database, or model credentials for this token.
+
+Run `bash infra/railway/start-computer-vm.sh` as root. It starts Docker, an
+unprivileged supervisor with Docker socket access, and a gateway on port 8080.
+Each computer has a separate Docker network, resource limits, and its own home
+under `/data/homes`. Only these homes are mounted into bot containers. The
+supervisor creates homes on the VM; API/worker files remain on their Railway
+volume and use the sandbox file adapter to access the remote computer.
+
+The gateway authenticates supervisor requests and translates desktop URLs into
+expiring, signed loopback-port capabilities. The web app seals remote desktop
+targets and restores VNC tokens server-side. Docker's socket, supervisor port,
+and desktop ports are never published directly to the internet.
+
+Set the backend to `SANDBOX_PROVIDER=docker`,
+`SANDBOX_SUPERVISOR_URL=https://<vm-public-domain>`, and the same supervisor token.
+Deploy both backend and web from this revision. Check `/health`, an actual bot
+response, a sandbox command, and the authenticated desktop websocket.
+
+Containers restart after a Docker daemon restart. Railway sleep preserves the
+disk but stops processes: after manually waking a VM, run the startup script
+again over SSH. Avoid sleeping the VM while bots are needed. The ephemeral
+Railway Sandbox product has an idle destruction limit and is not a substitute
+for this persistent VM. No local laptop process or SSH tunnel is required for
+normal operation.
 
 Local launcher checks require only Node:
 

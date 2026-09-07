@@ -96,6 +96,20 @@ describe("noVNC proxy authorization", () => {
     expect(resolveNovncTarget(view.replace("/view/", "/control/"), "secret", 1_000)).toBeNull();
   });
 
+  it("proxies a remote Docker desktop and restores its sealed websocket token", () => {
+    const directory = "/screens/49152/capability/";
+    const target = `https://computer.example${directory}embed.html?path=websockify%3Ftoken%3Dprivate&view_only=true`;
+    const view = remotePath(2_000, "secret", target).replace("/vnc.html", `${directory}embed.html`);
+    expect(resolveNovncTarget(view + "?view_only=false", "secret", 1_000)?.path)
+      .toBe(`${directory}embed.html?path=websockify%3Ftoken%3Dprivate&view_only=true`);
+    expect(resolveNovncTarget(view.replace("embed.html", "websockify?token=forged"), "secret", 1_000)?.path)
+      .toBe(`${directory}websockify?token=private`);
+    expect(resolveNovncTarget(view.replace("embed.html", "core/rfb.js"), "secret", 1_000)?.path)
+      .toBe(`${directory}core/rfb.js`);
+    expect(resolveNovncTarget(view.replace(`${directory}embed.html`, "/computers"), "secret", 1_000)?.path)
+      .toContain(`${directory}embed.html`);
+  });
+
   it("does not forward application credentials", () => {
     expect(
       safeProxyHeaders({

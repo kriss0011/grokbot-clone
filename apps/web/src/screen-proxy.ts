@@ -65,7 +65,7 @@ function resolveLocalTarget(match: RegExpMatchArray, secret: string, now: number
 
 export function screenPolicyPath(requestedPath: string, interactive: boolean) {
   const parsed = new URL(requestedPath, "http://screen.invalid");
-  if (parsed.pathname === "/embed.html" || parsed.pathname === "/vnc.html") {
+  if (/\/(embed|vnc)\.html$/.test(parsed.pathname)) {
     parsed.searchParams.set("view_only", interactive ? "false" : "true");
   }
   return `${parsed.pathname}${parsed.search}`;
@@ -74,6 +74,13 @@ export function screenPolicyPath(requestedPath: string, interactive: boolean) {
 function remoteTargetPath(target: URL, requestedPath: string) {
   const requested = new URL(requestedPath, "https://screen.invalid");
   const path = requested.pathname || target.pathname || "/";
+  const directory = new URL(".", target).pathname;
+  // A sealed desktop URL must not grant access to unrelated paths on its host.
+  if (!path.startsWith(directory)) return `${target.pathname}${target.search}`;
+  if (path === `${directory}websockify` && target.searchParams.has("path")) {
+    const socket = new URL(target.searchParams.get("path")!, target);
+    return `${path}${socket.search}`;
+  }
   if (path === target.pathname || path === "/websockify") {
     return `${path}${target.search}`;
   }
